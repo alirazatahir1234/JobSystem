@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    container_name: jobsystem-database
+    environment:
+      POSTGRES_DB: jobsystemdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/seed-data.sql:/docker-entrypoint-initdb.d/seed-data.sql
+    networks:
+      - jobsystem-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API - Development mode
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=database;Database=jobsystemdb;Username=postgres;Password=postgres123
+      - JWT__Secret=YourSuperSecretKeyThatIsAtLeast32CharactersLong!!!
+    ports:
+      - "5001:80"
+    depends_on:
+      - database
+    networks:
+      - jobsystem-network
+    volumes:
+      - ./backend:/app/src
+      - ./backend/logs:/app/logs
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - jobsystem-network
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  jobsystem-network:
+    driver: bridge

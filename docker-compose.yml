@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=jobsystemdb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - jobsystem-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Host=database;Database=jobsystemdb;Username=postgres;Password=postgres123
+      - JWT__Secret=YourSuperSecretKeyThatIsAtLeast32CharactersLong!!!
+    ports:
+      - "5000:80"
+    depends_on:
+      - database
+    networks:
+      - jobsystem-network
+    volumes:
+      - ./backend/logs:/app/logs
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - jobsystem-network
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000/api
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - jobsystem-network
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  jobsystem-network:
+    driver: bridge
